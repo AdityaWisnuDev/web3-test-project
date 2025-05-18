@@ -3,12 +3,10 @@
 import { useState, useEffect } from 'react';
 import { ArrowUpCircle, ArrowDownCircle, Wallet, DollarSign } from 'lucide-react';
 import { useAccount, useReadContract } from 'wagmi';
-// import { MockUSDCAbi } from '@/services/abi';
 import { formatUnits, parseUnits } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { parseEther } from 'viem';
 import { MockUSDCAbi, VaultAbi } from '@/services/abi';
 
 import LoadingSpinner from './components/LoadingSpinner';
@@ -30,7 +28,6 @@ export default function Home() {
     const [amount, setAmount] = useState<string>('');
     const [sliderValue, setSliderValue] = useState<number>(0);
     const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [notification, setNotification] = useState<NotificationType | null>(null);
 
     let balanceUSDC = useBalanceUSDC();
     let balanceVault = useBalanceVault();
@@ -81,47 +78,6 @@ export default function Home() {
         setSliderValue(percentage);
     };
 
-    /*
-    const handleSubmit = (): void => {
-        if (!amount || parseFloat(amount) <= 0) {
-        showNotification('Please enter a valid amount', 'error');
-        return;
-        }
-        
-        const parsedAmount = parseFloat(amount);
-        
-        if (activeTab === 'withdraw' && parsedAmount > balance) {
-        showNotification('Insufficient balance', 'error');
-        return;
-        }
-        
-        setIsLoading(true);
-        
-        // Simulate transaction
-        setTimeout(() => {
-        if (activeTab === 'deposit') {
-            // setBalance(prevBalance => prevBalance + parsedAmount);
-            showNotification(`Successfully deposited ${parsedAmount}`, 'success');
-        } else {
-            // setBalance(prevBalance => prevBalance - parsedAmount);
-            showNotification(`Successfully withdrew ${parsedAmount}`, 'success');
-        }
-        setAmount('');
-        setSliderValue(0);
-        setIsLoading(false);
-        }, 1500);
-    };
-    */
-    
-    /*
-    const showNotification = (message: string, type: 'success' | 'error'): void => {
-        setNotification({ message, type });
-        setTimeout(() => {
-        setNotification(null);
-        }, 3000);
-    };
-    */
-
     const [ step, setStep ] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'completed'>('idle');
     const [approveHash, setApproveHash] = useState<`0x${string}` | undefined>()
     const [depositHash, setDepositHash] = useState<`0x${string}` | undefined>()
@@ -145,39 +101,6 @@ export default function Home() {
     const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawSuccess } = useWaitForTransactionReceipt({
         hash: withdrawHash,
     })
-    
-    /*
-    const handleApproveAndDeposit = async () => {
-        setStep('approving');
-        setIsLoadingApprove('loading');
-        setIsLoadingDeposit('');
-        writeApprove(
-            {
-                address: '0xB6Df7f56e1dFF4073FD557500719A37232fC3337',
-                abi: MockUSDCAbi,
-                functionName: 'approve',
-                args: ['0xc39b0Fb736409C50cCD9Da42248b507762B18cE8', parseUnits(amount, 6)],
-            },
-            {
-                onSuccess(data) {
-                    setApproveHash(data);
-                    setStep('approved');
-                    setIsLoadingApprove('success');
-                },
-                onError(err) {
-                    setIsLoadingApprove('');
-                    setStep('idle')
-                },
-            }
-        )
-    }
-
-    */
-    // if (isApproveSuccess && step === 'approved') {
-    //     console.log('hit this');
-    //     depositFunction();
-    // }
-    
 
     const { address } = useAccount();
 
@@ -214,32 +137,6 @@ export default function Home() {
             }
         )
     }
-
-    // const depositFunction = async () => {
-    //     setIsLoadingDeposit('loading');
-
-    //     writeDeposit(
-    //         {
-    //             address: '0xc39b0Fb736409C50cCD9Da42248b507762B18cE8',
-    //             abi: VaultAbi,
-    //             functionName: 'deposit',
-    //             args: [parseUnits(amount, 6)],
-    //         },
-    //         {
-    //             onSuccess(data) {
-    //                 setDepositHash(data);
-    //                 setStep('completed');
-    //                 setIsLoadingDeposit('success');
-    //             },
-    //             onError(err) {
-    //                 console.log('disni');
-                    
-    //                 setStep('idle')
-    //                 setIsLoadingDeposit('');
-    //             },
-    //         }
-    //     )
-    // }
 
     const depositFunction = async () => {
         setIsLoadingDeposit('loading');
@@ -281,10 +178,6 @@ export default function Home() {
     const handleDeposit = async () => {
         if (Number(depositAmount) > Number(allowance)) {
             handleApprove();
-
-            // if (isApproveSuccess && step === 'approved') {
-            //     depositFunction();
-            // }
         } else {
             depositFunction();
         }
