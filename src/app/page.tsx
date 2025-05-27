@@ -7,7 +7,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { MockUSDCAbi, VaultAbi } from '@/services/abi';
+import { MockUSDCAbi, MockUSDCAddress, VaultAbi, VaultAddress } from '@/services/abi';
 
 import LoadingSpinner from './components/LoadingSpinner';
 import SuccessIcon from './components/SuccessIcon';
@@ -18,39 +18,48 @@ import { useBalanceVault } from '@/hooks/useBalanceVault';
 
 type TabType = 'deposit' | 'withdraw';
 
-interface NotificationType {
-  message: string;
-  type: 'success' | 'error';
-}
-
 export default function Home() {
     const [activeTab, setActiveTab] = useState<TabType>('deposit');
     const [amount, setAmount] = useState<string>('');
     const [sliderValue, setSliderValue] = useState<number>(0);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isLoadingApprove, setIsLoadingApprove] = useState<string>('');
+    const [isLoadingDeposit, setIsLoadingDeposit] = useState<string>('');
+    const [isLoadingWithdraw, setIsLoadingWithdraw] = useState<string>('');
+    const [approveHash, setApproveHash] = useState<`0x${string}` | undefined>();
 
     let balanceUSDC = useBalanceUSDC();
     let balanceVault = useBalanceVault();
 
+    const { data: USDCDecimals }: {data: number | undefined} = useReadContract({
+        address: MockUSDCAddress,
+        abi: MockUSDCAbi,
+        functionName: 'decimals',
+    });
+
     if (balanceUSDC && typeof balanceUSDC === 'bigint') {
-        balanceUSDC = (Number(formatUnits(balanceUSDC, 6)));
+        balanceUSDC = (Number(formatUnits(balanceUSDC, USDCDecimals || 6)));
     }
 
+    const { data: vaultDecimals }: {data: number | undefined} = useReadContract({
+        address: VaultAddress,
+        abi: VaultAbi,
+        functionName: 'decimals',
+    });
+
     if (balanceVault && typeof balanceVault === 'bigint') {
-        balanceVault = (Number(formatUnits(balanceVault, 6)))
+        balanceVault = (Number(formatUnits(balanceVault, vaultDecimals || 6)));
     }
     
-    // Maximum values for deposit and withdraw
+    
     const maxDeposit = Number(balanceUSDC);
     const maxWithdraw = Number(balanceVault);
     
-    // Update amount when slider changes
     useEffect(() => {
         const maxValue = activeTab === 'deposit' ? maxDeposit : maxWithdraw;
         setAmount((sliderValue * maxValue / 100).toFixed(2));
     }, [sliderValue, activeTab, maxWithdraw]);
     
-    // Reset values when tab changes
     useEffect(() => {
         setAmount('');
         setSliderValue(0);
@@ -61,7 +70,6 @@ export default function Home() {
     
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
         const value = e.target.value;
-        // Allow only numbers and decimal point
         if (value === '' || /^\d+\.?\d{0,2}$/.test(value)) {
         setAmount(value);
         const maxValue = activeTab === 'deposit' ? maxDeposit : maxWithdraw;
@@ -79,36 +87,21 @@ export default function Home() {
     };
 
     const [ step, setStep ] = useState<'idle' | 'approving' | 'approved' | 'depositing' | 'completed'>('idle');
-    const [approveHash, setApproveHash] = useState<`0x${string}` | undefined>()
-    const [depositHash, setDepositHash] = useState<`0x${string}` | undefined>()
-    const [withdrawHash, setWithdrawHash] = useState<`0x${string}` | undefined>()
     const { writeContract: writeApprove, isPending: isApprovePending } = useWriteContract()
     const { writeContract: writeDeposit, isPending: isDepositPending } = useWriteContract()
     const { writeContract: writeWithdraw, isPending: isWithdrawPending } = useWriteContract()
-
-    const [isLoadingApprove, setIsLoadingApprove] = useState<string>('');
-    const [isLoadingDeposit, setIsLoadingDeposit] = useState<string>('');
-    const [isLoadingWithdraw, setIsLoadingWithdraw] = useState<string>('');
 
     const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } = useWaitForTransactionReceipt({
         hash: approveHash,
     })
 
-    const { isLoading: isDepositConfirming, isSuccess: isDepositSuccess } = useWaitForTransactionReceipt({
-        hash: depositHash,
-    })
-
-    const { isLoading: isWithdrawConfirming, isSuccess: isWithdrawSuccess } = useWaitForTransactionReceipt({
-        hash: withdrawHash,
-    })
-
     const { address } = useAccount();
 
     const { data: allowance } = useReadContract({
-        address: '0xB6Df7f56e1dFF4073FD557500719A37232fC3337',
+        address: MockUSDCAddress,
         abi: MockUSDCAbi,
         functionName: 'allowance',
-        args: [address, '0xc39b0Fb736409C50cCD9Da42248b507762B18cE8']
+        args: [address, VaultAddress]
     })
 
     const depositAmount = parseUnits(amount, 6);
@@ -117,10 +110,10 @@ export default function Home() {
         setIsLoadingApprove('loading');
         writeApprove(
             {
-                address: '0xB6Df7f56e1dFF4073FD557500719A37232fC3337',
+                address: MockUSDCAddress,
                 abi: MockUSDCAbi,
                 functionName: 'approve',
-                args: ['0xc39b0Fb736409C50cCD9Da42248b507762B18cE8', parseUnits(amount, 6)],
+                args: [VaultAddress, parseUnits(amount, 6)],
             },
             {
                 onSuccess(data) {
@@ -129,8 +122,7 @@ export default function Home() {
                     setIsLoadingApprove('success');
                 },
                 onError(err) {
-                    console.log('err apprv');
-                    
+                    console.error('Approval error:', err);
                     setStep('idle');
                     setIsLoadingApprove('');
                 },
@@ -143,14 +135,13 @@ export default function Home() {
         try {
             await writeDeposit(
                 {
-                    address: '0xc39b0Fb736409C50cCD9Da42248b507762B18cE8',
+                    address: VaultAddress,
                     abi: VaultAbi,
                     functionName: 'deposit',
                     args: [parseUnits(amount, 6)],
                 },
                 {
                     onSuccess(data) {
-                        setDepositHash(data);
                         setStep('completed');
                         setIsLoadingDeposit('success');
                     },
@@ -183,40 +174,37 @@ export default function Home() {
         }
     }
 
-    const { data: balanceOfVault } = useReadContract({
-        address: '0xB6Df7f56e1dFF4073FD557500719A37232fC3337',
+    const {data: USDCBalanceOfVault} = useReadContract({
+        address: MockUSDCAddress,
         abi: MockUSDCAbi,
         functionName: 'balanceOf',
-        args: ['0xc39b0Fb736409C50cCD9Da42248b507762B18cE8']
+        args: [VaultAddress]
     });
 
-    console.log(balanceOfVault);
-    
-
-    const { data: totalSuply } = useReadContract({
-        address: '0xc39b0Fb736409C50cCD9Da42248b507762B18cE8',
+    const {data: totalSupplyVault} = useReadContract({
+        address: VaultAddress,
         abi: VaultAbi,
         functionName: 'totalSupply',
     });
 
-    const sharePrice = Number(balanceOfVault) / Number(totalSuply);
+    const sharePrice = Number(USDCBalanceOfVault) / Number(totalSupplyVault);
     const withdrawAmount = Number(parseUnits(amount, 6)) / sharePrice;
     
     const handleWithdraw = async () => {
         setIsLoadingWithdraw('loading');
         writeWithdraw(
             {
-                address: '0xc39b0Fb736409C50cCD9Da42248b507762B18cE8',
+                address: VaultAddress,
                 abi: VaultAbi,
                 functionName: 'withdraw',
-                args: [withdrawAmount]
+                args: [withdrawAmount.toFixed(0)]
             },
             {
                 onSuccess(data) {
                     setIsLoadingWithdraw('success')
                 },
                 onError(err) {
-                    console.error('Approval error:', err)
+                    console.error('Withdraw error:', err)
                 }
             }
         )
@@ -324,7 +312,6 @@ export default function Home() {
                     
                     {/* Submit Button */}
                     <button
-                        // onClick={handleSubmit}
                         onClick={
                             activeTab === 'deposit' ? handleDeposit : handleWithdraw
                         }
@@ -346,9 +333,6 @@ export default function Home() {
                         )}
                     </button>
                     <div className="flex flex-col gap-2">
-                        {/* Approve status */}
-                        {/* {step === 'approving' && <LoadingSpinner label="Approving" />}
-                        {step === 'approved' && <SuccessIcon label="Approved" />} */}
                         {isLoadingApprove !== '' && (
                             isLoadingApprove == 'loading' ? (
                                 <LoadingSpinner label="Approving" />
