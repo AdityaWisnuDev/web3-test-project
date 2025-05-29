@@ -48,7 +48,7 @@ export default function Home() {
     });
 
     if (balanceVault && typeof balanceVault === 'bigint') {
-        balanceVault = (Number(formatUnits(balanceVault, vaultDecimals || 6)));
+        balanceVault = (Number(formatUnits(balanceVault, vaultDecimals || 18)));
     }
     
     
@@ -188,7 +188,7 @@ export default function Home() {
     });
 
     const sharePrice = Number(USDCBalanceOfVault) / Number(totalSupplyVault);
-    const withdrawAmount = Number(parseUnits(amount, 6)) / sharePrice;
+    const withdrawAmount = Number(parseUnits(amount, USDCDecimals || 6)) / sharePrice;
     
     const handleWithdraw = async () => {
         setIsLoadingWithdraw('loading');
